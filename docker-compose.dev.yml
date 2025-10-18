@@ -1,0 +1,70 @@
+services:
+  # Nginx Web Server
+  nginx:
+    image: nginx:alpine
+    container_name: cs2-pugsharp-nginx-dev
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - cs2-pugsharp-dev-network
+
+  # PHP-FPM Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cs2-pugsharp-app-dev
+    restart: unless-stopped
+    volumes:
+      - ./:/var/www
+      - ./storage:/var/www/storage
+      - ./bootstrap/cache:/var/www/bootstrap/cache
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/database/database.sqlite
+      - CACHE_DRIVER=file
+      - QUEUE_CONNECTION=sync
+      - SESSION_DRIVER=file
+      - VITE_PORT=5173
+    ports:
+      - "5173:5173" # Vite dev server
+    networks:
+      - cs2-pugsharp-dev-network
+
+  # Queue Worker (opcional para desenvolvimento)
+  queue:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: cs2-pugsharp-queue-dev
+    restart: unless-stopped
+    command: php artisan queue:work --verbose --tries=3 --timeout=90
+    volumes:
+      - ./:/var/www
+    environment:
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/database/database.sqlite
+      - CACHE_DRIVER=file
+      - QUEUE_CONNECTION=sync
+      - SESSION_DRIVER=file
+    depends_on:
+      - app
+    networks:
+      - cs2-pugsharp-dev-network
+    profiles:
+      - with-queue # Use: docker-compose --profile with-queue up
+
+# Networks
+networks:
+  cs2-pugsharp-dev-network:
+    driver: bridge
